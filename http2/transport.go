@@ -57,6 +57,8 @@ const (
 	defaultUserAgent = "Go-http-client/2.0"
 )
 
+const DefaultH2CTimeout = 5 * time.Second
+
 // Transport is an HTTP/2 Transport.
 //
 // A Transport internally caches connections to servers. It is safe
@@ -664,11 +666,16 @@ func (t *Transport) H2CUpgradeRequest(req *http.Request, c net.Conn) (*ClientCon
 		return nil, nil, xerrors.Wrap(err, "Failed to send initial request")
 	}
 
+	// ensure that our read will terminate and not hang forever
+	c.SetReadDeadline(time.Now().Add(DefaultH2CTimeout))
 	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
 	if err != nil {
 		return nil, nil, xerrors.Wrap(err, "Failed to parse response")
 	}
 	defer resp.Body.Close()
+
+	// disarm our read deadline for the initial response before we hand it over
+	c.SetReadDeadline(time.Time{})
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
